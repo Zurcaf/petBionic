@@ -71,6 +71,7 @@ void setUp(void)
     g_bufferPos = 0;
     g_flushCount = 0;
     g_totalBytesWritten = 0;
+    memset(g_logBuffer, 0, LOG_BUFFER_SIZE);
 
     // Initialize HX711
     scale.begin(HX711_DT, HX711_SCK);
@@ -124,6 +125,15 @@ void addToBuffer(const char *line)
         return;
 
     unsigned int lineLen = strlen(line);
+    if (lineLen == 0)
+        return;
+
+    // Drop single lines that are bigger than the entire buffer.
+    if (lineLen >= LOG_BUFFER_SIZE)
+    {
+        Serial.println("[WARN] Line too large for buffer, dropping");
+        return;
+    }
 
     // Check if we need to flush
     if (g_bufferPos + lineLen + 1 > LOG_BUFFER_SIZE)
@@ -132,9 +142,10 @@ void addToBuffer(const char *line)
         flushBuffer();
     }
 
-    // Add line to buffer
-    strcat(g_logBuffer, line);
+    // Add line to buffer safely without relying on C-string state.
+    memcpy(&g_logBuffer[g_bufferPos], line, lineLen);
     g_bufferPos += lineLen;
+    g_logBuffer[g_bufferPos] = '\0';
 }
 
 // Flush buffer to SD card
@@ -164,7 +175,7 @@ void flushBuffer()
 
     Serial.printf("[FLUSH] #%lu: %u bytes in %lu μs (%.2f KB/s)\n",
                   g_flushCount, g_bufferPos, flushTime,
-                  (g_bufferPos / 1024.0) / (flushTime / 1000000.0));
+                  flushTime > 0 ? (g_bufferPos / 1024.0) / (flushTime / 1000000.0) : 0.0);
 
     // Reset buffer
     g_bufferPos = 0;
@@ -236,44 +247,45 @@ void test_realtime_buffered_acquisition(void)
     f.println("time_ms,type,v1,v2,v3,v4,v5,v6");
     f.close();
 
-    unsigned long startTime = millis();
+    unsigned long startUs = micros();
     unsigned long imuCounter = 0;
     unsigned long hxCounter = 0;
-    unsigned long lastImuTime = startTime;
-    unsigned long lastHxTime = startTime;
+    unsigned long lastImuUs = startUs;
+    unsigned long lastHxUs = startUs;
 
-    const unsigned long IMU_INTERVAL = 6666;  // ~150 Hz (6.67ms)
-    const unsigned long HX_INTERVAL = 12500;  // ~80 Hz (12.5ms)
-    const unsigned long TEST_DURATION = 5000; // 5 seconds
+    const unsigned long IMU_INTERVAL_US = 6667;      // ~150 Hz (6.667ms)
+    const unsigned long HX_INTERVAL_US = 12500;      // ~80 Hz (12.5ms)
+    const unsigned long TEST_DURATION_US = 5000000;  // 5 seconds
 
-    while (millis() - startTime < TEST_DURATION)
+    while (micros() - startUs < TEST_DURATION_US)
     {
-        unsigned long now = millis();
+        unsigned long nowUs = micros();
+        unsigned long nowMs = millis();
 
         // Check if it's time for IMU reading
-        if (now - lastImuTime >= IMU_INTERVAL)
+        if (nowUs - lastImuUs >= IMU_INTERVAL_US)
         {
             IMUSample sample = readIMU();
             char line[100];
             snprintf(line, sizeof(line),
                      "%lu,IMU,%d,%d,%d,%d,%d,%d\n",
-                     now, sample.accelX, sample.accelY, sample.accelZ,
+                     nowMs, sample.accelX, sample.accelY, sample.accelZ,
                      sample.gyroX, sample.gyroY, sample.gyroZ);
             addToBuffer(line);
-            lastImuTime = now;
+            lastImuUs = nowUs;
             imuCounter++;
         }
 
         // Check if it's time for HX711 reading
-        if (now - lastHxTime >= HX_INTERVAL && scale.is_ready())
+        if (nowUs - lastHxUs >= HX_INTERVAL_US && scale.is_ready())
         {
             long hxValue = scale.read_average(1);
             char line[100];
             snprintf(line, sizeof(line),
                      "%lu,HX,%ld,0,0,0,0,0\n",
-                     now, hxValue);
+                     nowMs, hxValue);
             addToBuffer(line);
-            lastHxTime = now;
+            lastHxUs = nowUs;
             hxCounter++;
         }
 
@@ -287,15 +299,15 @@ void test_realtime_buffered_acquisition(void)
         flushBuffer();
     }
 
-    unsigned long totalTime = millis() - startTime;
+    unsigned long totalTimeMs = (micros() - startUs) / 1000;
 
-    Serial.printf("\n[STATS] Duration: %lu ms\n", totalTime);
+    Serial.printf("\n[STATS] Duration: %lu ms\n", totalTimeMs);
     Serial.printf("[STATS] IMU samples: %lu (expected ~%lu for 150Hz)\n",
-                  imuCounter, TEST_DURATION * 150 / 1000);
+                  imuCounter, TEST_DURATION_US * 150 / 1000000);
     Serial.printf("[STATS] HX711 samples: %lu (expected ~%lu for 80Hz)\n",
-                  hxCounter, TEST_DURATION * 80 / 1000);
+                  hxCounter, TEST_DURATION_US * 80 / 1000000);
     Serial.printf("[STATS] Total sample rate: %.1f Hz\n",
-                  (imuCounter + hxCounter) * 1000.0 / totalTime);
+                  totalTimeMs > 0 ? (imuCounter + hxCounter) * 1000.0 / totalTimeMs : 0.0);
     Serial.printf("[STATS] Total flushes: %lu\n", g_flushCount);
     Serial.printf("[STATS] Total bytes on SD: %lu\n", g_totalBytesWritten);
 

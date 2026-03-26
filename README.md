@@ -124,6 +124,13 @@ Tempo de flush vs open/close por tamanho de buffer (μs):
 - 2048 B: flush 8302 | open/write/close 18831
 - 4096 B: flush 11698 | open/write/close 22324
 
+Resultado adicional (teste buffered end-to-end, 2026-03-26):
+
+- Teste: `test_buffered_sdcard_logging`
+- Flush observado: 1600 B em 19618 μs (79.65 KB/s)
+- Total escrito no ficheiro: 1635 B
+- Estado: PASS (1 teste, 0 falhas)
+
 Conclusões práticas:
 
 - Escrever linha-a-linha é caro (open/close domina latência).
