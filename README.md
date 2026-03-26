@@ -26,7 +26,7 @@ Hardware principal:
 
 - Microcontrolador: Seeed Studio XIAO ESP32-C3
 - Sensor inercial: MPU-9250
-- Sensor de carga
+- Sensor de carga: HX711
 - Módulo SD Card
 
 Funções:
@@ -36,6 +36,127 @@ Funções:
 - Armazenamento local
 - Comunicação BLE (controlo)
 - Comunicação Wi-Fi (sincronização)
+
+---
+
+## 🔧 Especificações dos Componentes
+
+### Microcontrolador - ESP32-C3
+
+- Processador: RISC-V 160MHz
+- Memória RAM: 320KB
+- Flash: 4MB
+- Comunicação: SPI, I2C, UART, BLE 5.0, Wi-Fi 802.11b/g/n
+
+### Sensor Inercial - MPU9250 (9-axis IMU)
+
+- Comunicação: SPI @1MHz
+- Saída:
+  - Acelerómetro 3-axis (XYZ)
+  - Giroscópio 3-axis (XYZ)
+  - Magnetómetro 3-axis (XYZ) via AK8963
+- Taxa de amostragem máxima (IMU-only): **~6075 Hz** (intervalo ~165 μs)
+
+### Sensor de Carga - HX711
+
+- Comunicação: Pinos digitais (DT/CLK)
+- Resolução: 24-bit ADC
+- Modos de operação:
+  - **Modo A (80 SPS)**: Menor filtragem digital, maior velocidade
+  - **Modo B (10 SPS)**: Maior filtragem digital integrada, maior estabilidade
+- Taxa máxima sincronizada (IMU+HX711): **~83-84 Hz** (limitado pelo HX711)
+- Nota: HX711 é o gargalo em amostragem sincronizada; IMU consegue ~6 kHz sozinha
+
+### Cartão SD
+
+- Comunicação: SPI
+- Função: Logging contínuo de dados em CSV
+- Armazenamento: Dados de sensores e logs de operação
+
+#### Estratégia de Escrita - Buffering em Memória
+
+**Problema:** Escrever linha-a-linha no SD Card bloqueia as leituras dos sensores (~50-100ms por operação).
+
+**Taxa de amostragem requerida:**
+
+- IMU: 150 Hz (1 amostra a cada ~6.67ms)
+- HX711: 80 Hz (1 amostra a cada 12.5ms)
+- **Total de eventos: ~230/segundo**
+
+**Solução implementada: Buffer circular de 2048 bytes**
+
+```
+Tamanho linha CSV (raw only): ~45 bytes/linha
+2048 bytes buffer: ~45 linhas (~200ms de dados)
+
+Estratégia:
+1. Acumular dados em buffer de RAM (sem I/O)
+2. Quando buffer atinge 2048 bytes, escrever TUDO de uma vez no SD
+3. Tempo de flush medido para 2048 B: ~8.3ms (não bloqueia sensores)
+4. Depois limpar o buffer e continuar
+
+Benefício: Reduz ciclos de escrita em 20-50x
+```
+
+**Performance medida (teste real em 2026-03-26):**
+
+Velocidade de escrita por tamanho de bloco (KB/s):
+
+- 128 B: 209.15
+- 256 B: 232.21
+- 512 B: 273.11
+- 1024 B: 337.22
+- 2048 B: 384.42
+- 4096 B: 415.08
+
+Overhead de operações de ficheiro (μs):
+
+- Open file: 28905
+- Close file: 2035
+- Open + write 1 byte + close: 42341
+- Open + write 100 bytes + close: 42626
+
+Tempo de flush vs open/close por tamanho de buffer (μs):
+
+- 256 B: flush 3817 | open/write/close 14078
+- 512 B: flush 3877 | open/write/close 14248
+- 1024 B: flush 5232 | open/write/close 16094
+- 2048 B: flush 8302 | open/write/close 18831
+- 4096 B: flush 11698 | open/write/close 22324
+
+Conclusões práticas:
+
+- Escrever linha-a-linha é caro (open/close domina latência).
+- Buffering é obrigatório para manter 150 Hz (IMU) + 80 Hz (HX711).
+- 2048 B é um bom compromisso entre latência e eficiência.
+- Registar apenas RAW reduz CPU e simplifica pós-processamento.
+
+**Formato de LOG (RAW ONLY):**
+
+```csv
+time_ms,type,v1,v2,v3,v4,v5,v6
+1000,IMU,1234,5678,9012,-340,-123,567
+1006,HX,388125,0,0,0,0,0
+1013,IMU,1245,5690,9025,-342,-125,570
+```
+
+- `type`: IMU (acelerómetro XYZ + giroscópio XYZ) ou HX (load cell raw 24-bit)
+- Valores: raw em LSB (sem processamento nem conversão de unidades)
+
+### Mapeamento de Pinos
+
+```
+SPI:
+  - SCK  -> D6 (GPIO21)
+  - MISO -> D5 (GPIO7)
+  - MOSI -> D4 (GPIO6)
+
+Sensores:
+  - IMU CS    -> D7 (GPIO20)
+  - SD CS     -> D8 (GPIO11)
+  - HX711 DT  -> D10 (GPIO10)
+  - HX711 CLK -> D9 (GPIO9)
+```
 
 ---
 

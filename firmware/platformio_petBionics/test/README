@@ -1,11 +1,119 @@
+Testes de firmware com PlatformIO (Unity)
 
-This directory is intended for PlatformIO Test Runner and project tests.
+Esta pasta contem os testes executados com o PlatformIO Test Runner.
 
-Unit Testing is a software testing method by which individual units of
-source code, sets of one or more MCU program modules together with associated
-control data, usage procedures, and operating procedures, are tested to
-determine whether they are fit for use. Unit testing finds problems early
-in the development cycle.
+Estrutura atual:
 
-More information about PlatformIO Unit Testing:
-- https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+- test/test_hx711_communication/test_main.cpp
+- test/test_high_rate_sampling/test_main.cpp
+- test/test_high_rate_imu_only/test_main.cpp
+- test/test_sdcard_write_speed/test_main.cpp (Performance do SD Card)
+- test/test_buffered_sdcard_logging/test_main.cpp (Buffering de dados)
+
+Objetivo dos testes integrados:
+
+- Confirmar comunicacao SPI com IMU (WHO_AM_I)
+- Confirmar leitura/escrita no SD card
+- Confirmar comunicacao e leitura bruta do HX711
+
+Nota: Ver README principal do projeto para especificações detalhadas dos componentes e resultados de testes de performance.
+
+Pre-requisitos:
+
+- Board: Seeed Studio XIAO ESP32-C3
+- Ligacoes:
+  - SPI SCK -> D6
+  - SPI MISO -> D5
+  - SPI MOSI -> D4
+  - IMU CS -> D7
+  - SD CS -> D8
+  - HX711 VCC -> 3V3
+  - HX711 GND -> GND
+  - HX711 DOUT/DT -> D10
+  - HX711 SCK/CLK -> D9
+- Fechar qualquer monitor serial antes de correr os testes
+
+Como correr os testes:
+
+1. Abrir a pasta firmware/platformio_petBionics
+2. Executar:
+   - pio test -e seeed_xiao_esp32c3
+
+- Para apenas alta frequencia: pio test -e seeed_xiao_esp32c3 --filter test_high_rate_sampling
+- Para apenas IMU alta frequencia: pio test -e seeed_xiao_esp32c3 --filter test_high_rate_imu_only
+
+Se o comando `pio` nao funcionar no PowerShell, usar caminho completo:
+
+- C:/Users/ACR/.platformio/penv/Scripts/platformio.exe test -e seeed_xiao_esp32c3
+- C:/Users/ACR/.platformio/penv/Scripts/platformio.exe test -e seeed_xiao_esp32c3 --filter test_high_rate_sampling
+- C:/Users/ACR/.platformio/penv/Scripts/platformio.exe test -e seeed_xiao_esp32c3 --filter test_high_rate_imu_only
+
+3. Resultado esperado:
+
+- 4 test cases succeeded
+
+Output serial esperado:
+
+- [TEST] IMU communication + WHO_AM_I
+- [TEST] SD card read/write + linha lida
+- [TEST] HX711 detect
+- [TEST] HX711 raw reads + amostras raw
+
+Teste de alta frequencia:
+
+- Executa amostragem sincronizada IMU + HX711 com intervalo minimo (sem delay)
+- Coleta 120 amostras com timing de precisão microsegundos
+- Imprime estatisticas no fim:
+  - dt_us min/avg/max
+  - rate_hz min/avg/max
+- Resultado real: 83.62 Hz em média (dt_us avg = 11958.99)
+  - Intervalo mínimo: 11911 μs, máximo: 11964 μs (variação muito estável)
+  - Taxa Hz: min=83.58, avg=83.62, max=83.96 Hz
+
+Teste de alta frequencia IMU-only:
+
+- Executa amostragem apenas da IMU com intervalo minimo (sem delay)
+- Serve para medir o limite maximo da IMU sem o gargalo do HX711
+- Coleta 400 amostras (mais amostras para melhor caracterização)
+- Imprime estatisticas no fim:
+  - dt_us min/avg/max
+  - rate_hz min/avg/max
+- Resultado real: 6075.28 Hz em média (dt_us avg = 164.60)
+  - Intervalo mínimo: 163 μs, máximo: 177 μs
+  - Taxa Hz: min=5649.72, avg=6075.28, max=6134.97 Hz
+  - Conclusão: IMU é capaz de ~6 kHz, HX711 limita taxa sincronizada a ~84 Hz
+
+Teste de escrita/Flush do SD Card:
+
+- Testes de performance para caracterizar velocidade de escrita SD
+- Mede open/close overhead e flush timing com diferentes tamanhos de buffer
+- Ajuda a determinar estratégia de buffering ideal
+
+- Para apenas teste SD: pio test -e seeed_xiao_esp32c3 --filter test_sdcard_write_speed
+
+Teste de logging com buffering (recomendado para producao):
+
+- Implementa a estratégia de buffering em memoria com flush automatico
+- Buffer de 2048 bytes: 45-50 linhas CSV (~200ms de dados)
+- Quando buffer enche, faz flush de uma vez (operacao rapida ~1-4ms)
+- Nao bloqueia leituras de sensores durante I/O
+- Log apenas dados RAW (sem calculo nem conversao)
+- Formato: time_ms,type,v1,v2,v3,v4,v5,v6
+  - type: IMU (acelerometro+giroscopio) ou HX (load cell bruto)
+  - v1-v6: valores raw em LSB
+
+- Para apenas teste buffering: pio test -e seeed_xiao_esp32c3 --filter test_buffered_sdcard_logging
+
+Se falhar no upload com erro de porta ocupada:
+
+- Fechar PlatformIO Monitor/Serial Monitor
+- Confirmar a COM correta
+- Opcional: definir no platformio.ini
+  - upload_port = COMx
+  - test_port = COMx
+
+Notas:
+
+- O firmware de producao fica em src/main.cpp
+- Os testes de hardware devem ficar em test/
+- Para mais detalhes: https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
