@@ -1,13 +1,15 @@
 #include <Arduino.h>
 
+#include "pipeline/PetBionicsApp.h"
+
+PetBionicsApp app;
+
 void setup()
 {
-  Serial.begin(115200);
-  delay(200);
-  Serial.println("petBionics firmware started");
+  app.begin();
 }
 
 void loop()
 {
-  delay(1000);
+  app.update();
 }
