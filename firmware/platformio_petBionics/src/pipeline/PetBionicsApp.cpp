@@ -50,21 +50,25 @@ void PetBionicsApp::sampleStep(uint32_t nowMs)
   _filter.setAlpha(_config.filterAlpha);
   _detector.setThreshold(_config.eventThreshold);
 
+  uint64_t epochMs = _ble.currentEpochMs(nowMs);
+  int16_t ax = 0;
+  int16_t ay = 0;
+  int16_t az = 0;
+  int16_t gx = 0;
+  int16_t gy = 0;
+  int16_t gz = 0;
+
   int32_t raw = _sensor.readRaw();
+  _sensor.readImuAxes(ax, ay, az, gx, gy, gz);
   float filtered = _filter.update(static_cast<float>(raw));
   EventInfo event = _detector.update(static_cast<float>(raw), filtered, nowMs);
 
-  RawSample sample{nowMs, raw, filtered};
+  RawSample sample{nowMs, epochMs, raw, filtered, ax, ay, az, gx, gy, gz};
   _logger.append(sample, event);
 
   _status.samples++;
   if (event.triggered)
   {
     _status.events++;
-    Serial.printf("event t=%lu score=%.2f raw=%ld filt=%.2f\n",
-                  static_cast<unsigned long>(sample.tLocalMs),
-                  event.score,
-                  static_cast<long>(sample.raw),
-                  sample.filtered);
   }
 }

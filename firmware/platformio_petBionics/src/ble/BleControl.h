@@ -12,6 +12,7 @@ public:
   void begin(const char *deviceName = "petBionics");
   void updateStatus(const AppStatus &status, uint32_t nowMs);
   void applyCommand(const String &cmd);
+  uint64_t currentEpochMs(uint32_t nowMs) const;
 
 private:
   AppConfig &_config;

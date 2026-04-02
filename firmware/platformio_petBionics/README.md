@@ -35,15 +35,15 @@ pio device monitor -e seeed_xiao_esp32c3_diag
 
 Os pinos definidos em `src/core/Pinout.h` são estes:
 
-| Sinal | Função | GPIO | Pino no XIAO |
-| --- | --- | --- | --- |
-| `kSpiSck` | SPI SCK | GPIO21 | D6 |
-| `kSpiMiso` | SPI MISO | GPIO7 | D5 |
-| `kSpiMosi` | SPI MOSI | GPIO6 | D4 |
-| `kImuCs` | Chip Select da IMU | GPIO20 | D7 |
-| `kSdCs` | Chip Select do SD | GPIO11 | D8 |
-| `kHx711Dout` | HX711 DOUT | GPIO10 | D10 |
-| `kHx711Sck` | HX711 SCK | GPIO9 | D9 |
+| Sinal        | Função             | GPIO   | Pino no XIAO |
+| ------------ | ------------------ | ------ | ------------ |
+| `kSpiSck`    | SPI SCK            | GPIO21 | D6           |
+| `kSpiMiso`   | SPI MISO           | GPIO7  | D5           |
+| `kSpiMosi`   | SPI MOSI           | GPIO6  | D4           |
+| `kImuCs`     | Chip Select da IMU | GPIO20 | D7           |
+| `kSdCs`      | Chip Select do SD  | GPIO11 | D8           |
+| `kHx711Dout` | HX711 DOUT         | GPIO10 | D10          |
+| `kHx711Sck`  | HX711 SCK          | GPIO9  | D9           |
 
 ## Ligações
 

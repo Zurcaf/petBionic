@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <FS.h>
+#include <SPI.h>
 
 #include "../core/AppTypes.h"
 
@@ -17,5 +18,6 @@ private:
   uint8_t _csPin;
   const char *_filePath;
   bool _ready;
+  SPIClass _spi;
   bool ensureHeader();
 };

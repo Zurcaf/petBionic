@@ -14,6 +14,18 @@
 #define PETBIONICS_HAS_BLE 0
 #endif
 
+#ifndef PETBIONICS_BLE_DEBUG
+#define PETBIONICS_BLE_DEBUG 0
+#endif
+
+#if PETBIONICS_BLE_DEBUG
+#define BLE_DEBUG_PRINTLN(msg) Serial.println(msg)
+#define BLE_DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#else
+#define BLE_DEBUG_PRINTLN(msg) ((void)0)
+#define BLE_DEBUG_PRINTF(...) ((void)0)
+#endif
+
 namespace
 {
 #if PETBIONICS_HAS_BLE
@@ -37,16 +49,20 @@ namespace
       std::string value = pCharacteristic->getValue();
       if (value.empty())
       {
+        BLE_DEBUG_PRINTLN("[BLE RX] empty write payload");
         return;
       }
 
       String command = String(value.c_str());
+      BLE_DEBUG_PRINTF("[BLE RX] raw='%s' len=%u\n", command.c_str(), static_cast<unsigned>(command.length()));
       command.trim();
       if (command.length() == 0)
       {
+        BLE_DEBUG_PRINTLN("[BLE RX] payload became empty after trim");
         return;
       }
 
+      BLE_DEBUG_PRINTF("[BLE RX] cmd='%s'\n", command.c_str());
       g_instance->applyCommand(command);
     }
   };
@@ -62,6 +78,11 @@ BleControl::BleControl(AppConfig &config)
       _timeSynced(false),
       _epochOffsetMs(0) {}
 
+uint64_t BleControl::currentEpochMs(uint32_t nowMs) const
+{
+  return nowEpochMs(nowMs);
+}
+
 bool BleControl::tryApplyTimeCommand(const String &cmd)
 {
   if (!cmd.startsWith("TIME="))
@@ -73,6 +94,7 @@ bool BleControl::tryApplyTimeCommand(const String &cmd)
   rawValue.trim();
   if (rawValue.length() == 0)
   {
+    BLE_DEBUG_PRINTLN("[BLE RX] TIME ignored: missing value");
     return true;
   }
 
@@ -80,6 +102,7 @@ bool BleControl::tryApplyTimeCommand(const String &cmd)
   long long parsed = strtoll(rawValue.c_str(), &endPtr, 10);
   if (endPtr == rawValue.c_str() || (endPtr && *endPtr != '\0') || parsed <= 0)
   {
+    BLE_DEBUG_PRINTF("[BLE RX] TIME ignored: invalid value '%s'\n", rawValue.c_str());
     return true;
   }
 
@@ -95,6 +118,7 @@ bool BleControl::tryApplyTimeCommand(const String &cmd)
   _timeSynced = true;
   _timeSyncRequested = false;
   _lastTimeSetMs = millis();
+  BLE_DEBUG_PRINTF("[BLE RX] TIME applied epoch_ms=%llu\n", static_cast<unsigned long long>(epochMs));
   return true;
 }
 
@@ -187,9 +211,23 @@ void BleControl::updateStatus(const AppStatus &status, uint32_t nowMs)
 
 void BleControl::applyCommand(const String &cmd)
 {
+  const uint32_t nowMs = millis();
+  const uint64_t epochMsBefore = nowEpochMs(nowMs);
+  if (epochMsBefore > 0)
+  {
+    Serial.printf("BLE RX cmd='%s' t_real_ms=%llu\n",
+                  cmd.c_str(),
+                  static_cast<unsigned long long>(epochMsBefore));
+  }
+  else
+  {
+    Serial.printf("BLE RX cmd='%s' t_real_ms=UNSYNCED\n", cmd.c_str());
+  }
+
   if (cmd.equalsIgnoreCase("TIME_SYNC_NOW"))
   {
     _timeSyncRequested = true;
+    BLE_DEBUG_PRINTLN("[BLE RX] TIME_SYNC_NOW accepted");
     return;
   }
 
@@ -201,12 +239,34 @@ void BleControl::applyCommand(const String &cmd)
   if (cmd.equalsIgnoreCase("START"))
   {
     _config.acquisitionEnabled = true;
+    const uint64_t epochMsAfter = nowEpochMs(nowMs);
+    if (epochMsAfter > 0)
+    {
+      Serial.printf("BLE START -> logging ON t_real_ms=%llu\n",
+                    static_cast<unsigned long long>(epochMsAfter));
+    }
+    else
+    {
+      Serial.println("BLE START -> logging ON t_real_ms=UNSYNCED");
+    }
+    BLE_DEBUG_PRINTLN("[BLE RX] START accepted");
     return;
   }
 
   if (cmd.equalsIgnoreCase("STOP"))
   {
     _config.acquisitionEnabled = false;
+    const uint64_t epochMsAfter = nowEpochMs(nowMs);
+    if (epochMsAfter > 0)
+    {
+      Serial.printf("BLE STOP -> logging OFF t_real_ms=%llu\n",
+                    static_cast<unsigned long long>(epochMsAfter));
+    }
+    else
+    {
+      Serial.println("BLE STOP -> logging OFF t_real_ms=UNSYNCED");
+    }
+    BLE_DEBUG_PRINTLN("[BLE RX] STOP accepted");
     return;
   }
 
@@ -216,6 +276,11 @@ void BleControl::applyCommand(const String &cmd)
     if (v >= 0.0f && v <= 1.0f)
     {
       _config.filterAlpha = v;
+      BLE_DEBUG_PRINTF("[BLE RX] ALPHA applied %.3f\n", v);
+    }
+    else
+    {
+      BLE_DEBUG_PRINTF("[BLE RX] ALPHA ignored %.3f (out of range)\n", v);
     }
     return;
   }
@@ -226,6 +291,11 @@ void BleControl::applyCommand(const String &cmd)
     if (v >= 0.0f)
     {
       _config.eventThreshold = v;
+      BLE_DEBUG_PRINTF("[BLE RX] THR applied %.3f\n", v);
+    }
+    else
+    {
+      BLE_DEBUG_PRINTF("[BLE RX] THR ignored %.3f (negative)\n", v);
     }
     return;
   }
@@ -236,6 +306,14 @@ void BleControl::applyCommand(const String &cmd)
     if (v >= 1)
     {
       _config.samplePeriodMs = static_cast<uint32_t>(v);
+      BLE_DEBUG_PRINTF("[BLE RX] PERIOD applied %ld ms\n", v);
     }
+    else
+    {
+      BLE_DEBUG_PRINTF("[BLE RX] PERIOD ignored %ld (must be >=1)\n", v);
+    }
+    return;
   }
+
+  BLE_DEBUG_PRINTF("[BLE RX] unknown cmd '%s'\n", cmd.c_str());
 }

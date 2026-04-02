@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "Pinout.h"
 
 struct AppConfig
 {
@@ -9,9 +10,8 @@ struct AppConfig
   float eventThreshold = 100.0f; // abs(filtered - raw)
   uint32_t eventCooldownMs = 300;
   uint8_t analogPin = A0; // fallback raw source
-  bool acquisitionEnabled = true;
+  bool acquisitionEnabled = false;
 
-  // Change this to the real CS pin used by your SD module.
-  uint8_t sdCsPin = 5;
+  uint8_t sdCsPin = PetBionicsPinout::kSdCs;
   const char *sdPath = "/raw_log.csv";
 };

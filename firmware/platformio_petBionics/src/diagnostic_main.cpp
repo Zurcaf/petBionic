@@ -108,7 +108,7 @@ namespace
             return;
         }
 
-        RawSample sample{millis(), 1234, 98.76f};
+        RawSample sample{millis(), 0ULL, 1234, 98.76f, 0, 0, 0, 0, 0, 0};
         EventInfo event{true, 45.67f};
         bool appended = sdLogger.append(sample, event);
         Serial.printf("logger.append() -> %s\n", appended ? "OK" : "FAIL");
