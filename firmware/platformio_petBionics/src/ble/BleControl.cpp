@@ -29,9 +29,9 @@
 namespace
 {
 #if PETBIONICS_HAS_BLE
-  const char *kServiceUuid = "14f16000-9d9c-470f-9f6a-6e6fe401a001";
-  const char *kControlUuid = "14f16001-9d9c-470f-9f6a-6e6fe401a001";
-  const char *kStatusUuid = "14f16002-9d9c-470f-9f6a-6e6fe401a001";
+  const char *kServiceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+  const char *kControlUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+  const char *kStatusUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
 
   BLECharacteristic *g_controlCharacteristic = nullptr;
   BLECharacteristic *g_statusCharacteristic = nullptr;

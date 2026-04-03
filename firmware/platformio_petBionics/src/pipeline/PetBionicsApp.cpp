@@ -27,7 +27,7 @@ void PetBionicsApp::begin()
     Serial.println("SD logger not ready (running without logging)");
   }
 
-  _ble.begin("petBionics");
+  _ble.begin("PetBionic");
 }
 
 void PetBionicsApp::update()
