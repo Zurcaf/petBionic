@@ -3,7 +3,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
-#include <sys/time.h>
 
 #if __has_include(<BLEDevice.h>)
 #include <BLEDevice.h>
@@ -30,42 +29,13 @@
 namespace
 {
 #if PETBIONICS_HAS_BLE
-  void syncSystemClock(uint64_t epochMs)
-  {
-    if (epochMs == 0)
-    {
-      return;
-    }
+  const char *kServiceUuid = "14f16000-9d9c-470f-9f6a-6e6fe401a001";
+  const char *kControlUuid = "14f16001-9d9c-470f-9f6a-6e6fe401a001";
+  const char *kStatusUuid = "14f16002-9d9c-470f-9f6a-6e6fe401a001";
 
-    timeval tv;
-    tv.tv_sec = static_cast<time_t>(epochMs / 1000ULL);
-    tv.tv_usec = static_cast<suseconds_t>((epochMs % 1000ULL) * 1000ULL);
-    settimeofday(&tv, nullptr);
-  }
-
-#endif
-
-#if PETBIONICS_HAS_BLE
-  const char *kServiceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-  const char *kControlUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
-  const char *kStatusUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
-
-  BLEAdvertising *g_advertising = nullptr;
   BLECharacteristic *g_controlCharacteristic = nullptr;
   BLECharacteristic *g_statusCharacteristic = nullptr;
   BleControl *g_instance = nullptr;
-
-  class ServerCallbacks : public BLEServerCallbacks
-  {
-    void onDisconnect(BLEServer *server) override
-    {
-      (void)server;
-      if (g_advertising)
-      {
-        g_advertising->start();
-      }
-    }
-  };
 
   class ControlCallbacks : public BLECharacteristicCallbacks
   {
@@ -148,7 +118,6 @@ bool BleControl::tryApplyTimeCommand(const String &cmd)
   _timeSynced = true;
   _timeSyncRequested = false;
   _lastTimeSetMs = millis();
-  syncSystemClock(epochMs);
   BLE_DEBUG_PRINTF("[BLE RX] TIME applied epoch_ms=%llu\n", static_cast<unsigned long long>(epochMs));
   return true;
 }
@@ -175,7 +144,6 @@ void BleControl::begin(const char *deviceName)
   BLEDevice::init(deviceName);
 
   BLEServer *server = BLEDevice::createServer();
-  server->setCallbacks(new ServerCallbacks());
   BLEService *service = server->createService(kServiceUuid);
 
   g_controlCharacteristic = service->createCharacteristic(
@@ -188,9 +156,9 @@ void BleControl::begin(const char *deviceName)
   g_statusCharacteristic->setValue(_statusCache.c_str());
 
   service->start();
-  g_advertising = BLEDevice::getAdvertising();
-  g_advertising->addServiceUUID(kServiceUuid);
-  g_advertising->start();
+  BLEAdvertising *advertising = BLEDevice::getAdvertising();
+  advertising->addServiceUUID(kServiceUuid);
+  advertising->start();
 
   g_instance = this;
 #else
@@ -345,23 +313,6 @@ void BleControl::applyCommand(const String &cmd)
     else
     {
       BLE_DEBUG_PRINTF("[BLE RX] PERIOD ignored %ld (must be >=1)\n", v);
-    }
-    return;
-  }
-
-  if (cmd.startsWith("RATE="))
-  {
-    long hz = cmd.substring(5).toInt();
-    if (hz >= 1)
-    {
-      _config.samplePeriodUs = static_cast<uint32_t>(1000000UL / static_cast<uint32_t>(hz));
-      BLE_DEBUG_PRINTF("[BLE RX] RATE applied %ld Hz (period_us=%lu)\n",
-                       hz,
-                       static_cast<unsigned long>(_config.samplePeriodUs));
-    }
-    else
-    {
-      BLE_DEBUG_PRINTF("[BLE RX] RATE ignored %ld (must be >=1)\n", hz);
     }
     return;
   }
