@@ -4,11 +4,6 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 
-<<<<<<< HEAD
-// Convenience: field between comma[n-1] and comma[n].
-// Pass commaPos[] pre-computed from the line.
-static String field(const String &line, const int *cp, int col, int totalCols)
-=======
 // ---------------------------------------------------------------------------
 // CSV parsing helpers
 // CSV column layout (17 columns, 0-indexed):
@@ -19,7 +14,6 @@ static String field(const String &line, const int *cp, int col, int totalCols)
 //  14  roll  15  pitch  16  yaw
 // ---------------------------------------------------------------------------
 static String csvField(const String &line, const int *cp, int col, int totalCols)
->>>>>>> origin/main
 {
     int start = (col == 0) ? 0 : cp[col - 1] + 1;
     int end   = (col < totalCols - 1) ? cp[col] : (int)line.length();
