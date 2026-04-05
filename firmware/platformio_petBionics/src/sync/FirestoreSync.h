@@ -24,10 +24,9 @@ public:
     SyncResult syncFile(const char *filePath, const String &sessionId);
 
 private:
-    static constexpr const char *kProject   = "petbionic-71360";
-    static constexpr const char *kApiKey    = "AIzaSyBdueBd5STH_rrrZxo59i-6CMR-ozFgyV0";
-    static constexpr const char *kBaseUrl   =
-        "https://firestore.googleapis.com/v1/projects/petbionic-71360"
+    static constexpr const char *kApiKey  = FIRESTORE_API_KEY;
+    static constexpr const char *kBaseUrl =
+        "https://firestore.googleapis.com/v1/projects/" FIREBASE_PROJECT
         "/databases/(default)/documents";
 
     // Upload the session-level metadata document.

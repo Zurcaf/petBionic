@@ -59,6 +59,7 @@ object BleManager {
         val adapter = (ctx.getSystemService(Context.BLUETOOTH_SERVICE)
                 as BluetoothManager).adapter
         if (!adapter.isEnabled) {
+            Log.w("BleManager", "startScan: Bluetooth not enabled")
             return
         }
         // Ensure a clean state before attempting a new discovery/connection cycle.
@@ -66,19 +67,15 @@ object BleManager {
         cmdChar = null
         isConnected = false
         scanner = adapter.bluetoothLeScanner
-        val filters = buildList {
-            SERVICE_UUIDS.forEach { uuid ->
-                add(ScanFilter.Builder().setServiceUuid(ParcelUuid(uuid)).build())
-            }
-            DEVICE_NAMES.forEach { name ->
-                add(ScanFilter.Builder().setDeviceName(name).build())
-            }
-        }
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
         handler.removeCallbacks(stopScanRunnable)
-        scanner?.startScan(filters, settings, scanCallback)
-        handler.postDelayed(stopScanRunnable, 10000)
+        // Scan without filters — filter by name in the callback.
+        // UUID-based filters can fail on some Android versions when the device
+        // doesn't include the service UUID in every advertisement packet.
+        scanner?.startScan(null, settings, scanCallback)
+        handler.postDelayed(stopScanRunnable, 15000)
+        Log.d("BleManager", "BLE scan started (no filters, 15 s)")
     }
 
     fun stopScan() {
@@ -157,6 +154,9 @@ object BleManager {
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
+            val name = result.device.name ?: return
+            if (DEVICE_NAMES.none { it.equals(name, ignoreCase = true) }) return
+            Log.d("BleManager", "Found device: $name (${result.device.address})")
             stopScan()
             val ctx = context ?: return
             closeGatt()
@@ -168,6 +168,7 @@ object BleManager {
         }
 
         override fun onScanFailed(errorCode: Int) {
+            Log.e("BleManager", "Scan failed errorCode=$errorCode")
             isConnected = false
             handler.post { onConnectionChanged?.invoke(false) }
         }

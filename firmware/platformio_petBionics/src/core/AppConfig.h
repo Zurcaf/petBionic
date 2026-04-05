@@ -22,4 +22,15 @@ struct AppConfig
     bool wifiEnabled          = false;
     char wifiSsid    [kWifiSsidMaxLen]     = {};
     char wifiPassword[kWifiPasswordMaxLen] = {};
+
+    // ── Sync control ─────────────────────────────────────────────────────
+    // Set by BleControl when SYNC command is received; cleared by app loop.
+    bool syncRequested              = false;
+    // Path of the last closed session file; used by SYNC command.
+    char lastSessionFilePath[96]    = {};
+    // Written by sync FreeRTOS task; read+cleared by app loop to notify BLE.
+    // 0=none, 1=ok, 2=fail, 3=no-wifi, 5=no-pending
+    volatile int syncResultCode     = 0;
+    // Number of files successfully uploaded in the last sync-all pass.
+    volatile int syncSentCount      = 0;
 };

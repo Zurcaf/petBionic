@@ -15,6 +15,7 @@
     <string name="action_stop">⏹ Stop</string>
     <string name="action_configure_wifi">⚙ Configure WiFi</string>
     <string name="action_session_history">📋 Session History</string>
+    <string name="action_send_session">☁ Send Last Session</string>
     <string name="title_session_history">Session History</string>
     <string name="title_force_over_time">Force over Time</string>
     <string name="title_accel_over_time">Acceleration over Time</string>

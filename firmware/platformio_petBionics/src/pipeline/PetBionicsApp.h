@@ -7,8 +7,6 @@
 #include "../core/LocalClock.h"
 #include "../sensors/RawSensor.h"
 #include "../storage/RawSdLogger.h"
-#include "../wifi/WifiManager.h"       // NEW
-#include "../sync/FirestoreSync.h"     // NEW
 #include "LightFilter.h"
 #include "OrientationEstimator.h"
 #include "SimpleEventDetector.h"
@@ -29,8 +27,6 @@ private:
     OrientationEstimator _orientation;
     RawSdLogger          _logger;
     BleControl           _ble;
-    WifiManager          _wifi;        // NEW
-    FirestoreSync        _sync;        // NEW
 
     uint32_t _lastSampleUs;
     bool     _wasAcquiring;

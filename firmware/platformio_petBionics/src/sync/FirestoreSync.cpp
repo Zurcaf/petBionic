@@ -4,30 +4,6 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 
-// ---------------------------------------------------------------------------
-// Helper: find the n-th comma position in a String (0-indexed).
-// Returns -1 if not found.
-// ---------------------------------------------------------------------------
-static int nthComma(const String &s, int n)
-{
-    int found = -1;
-    int count = 0;
-    for (int i = 0; i < (int)s.length(); ++i)
-    {
-        if (s[i] == ',')
-        {
-            if (count == n)
-            {
-                return i;
-            }
-            ++count;
-            found = i;
-        }
-    }
-    (void)found;
-    return -1;
-}
-
 // Convenience: field between comma[n-1] and comma[n].
 // Pass commaPos[] pre-computed from the line.
 static String field(const String &line, const int *cp, int col, int totalCols)
