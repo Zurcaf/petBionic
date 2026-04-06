@@ -20,12 +20,17 @@ private:
     static constexpr const char *kBaseUrl =
         "https://firestore.googleapis.com/v1/projects/" FIREBASE_PROJECT
         "/databases/(default)/documents";
+    static constexpr const char *kAuthUrl =
+        "https://identitytoolkit.googleapis.com/v1/accounts:signUp";
 
-    int uploadSessionDoc(WiFiClientSecure &client,
+    String getIdToken(WiFiClientSecure &client);
+    int    uploadSessionDoc(WiFiClientSecure &client,
+                            const String &sessionId,
+                            uint32_t startMs,
+                            const String &idToken);
+    int    uploadReading(WiFiClientSecure &client,
                          const String &sessionId,
-                         uint32_t startMs);
-    int uploadReading(WiFiClientSecure &client,
-                      const String &sessionId,
-                      int index,
-                      const String &csvLine);
+                         int index,
+                         const String &csvLine,
+                         const String &idToken);
 };

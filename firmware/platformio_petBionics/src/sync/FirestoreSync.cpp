@@ -15,15 +15,49 @@ static String csvField(const String &line, const int *cp, int col, int totalCols
 }
 
 // ---------------------------------------------------------------------------
+// Anonymous sign-in — returns Firebase ID token or "" on failure.
+// ---------------------------------------------------------------------------
+String FirestoreSync::getIdToken(WiFiClientSecure &client)
+{
+    String url = String(kAuthUrl) + "?key=" + kApiKey;
+
+    HTTPClient http;
+    http.begin(client, url);
+    http.addHeader("Content-Type", "application/json");
+    int code = http.POST("{\"returnSecureToken\":true}");
+    if (code != 200)
+    {
+        Serial.printf("[Firestore] Auth failed %d\n", code);
+        http.end();
+        client.stop();
+        return "";
+    }
+
+    String resp = http.getString();
+    http.end();
+    client.stop();
+    delay(100);
+
+    int keyIdx = resp.indexOf("\"idToken\":");
+    if (keyIdx < 0) return "";
+    int start = resp.indexOf('"', keyIdx + 10) + 1;
+    int end   = resp.indexOf('"', start);
+    if (start <= 0 || end <= start) return "";
+
+    String token = resp.substring(start, end);
+    Serial.printf("[Firestore] Auth OK (token %d chars)\n", token.length());
+    return token;
+}
+
+// ---------------------------------------------------------------------------
 // Session metadata document
 // ---------------------------------------------------------------------------
 int FirestoreSync::uploadSessionDoc(WiFiClientSecure &client,
                                     const String &sessionId,
-                                    uint32_t startMs)
+                                    uint32_t startMs,
+                                    const String &idToken)
 {
-    String url = String(kBaseUrl) +
-                 "/sessions/" + sessionId +
-                 "?key=" + kApiKey;
+    String url = String(kBaseUrl) + "/sessions/" + sessionId;
 
     String body =
         "{\"fields\":{"
@@ -34,22 +68,23 @@ int FirestoreSync::uploadSessionDoc(WiFiClientSecure &client,
         "}}";
 
     HTTPClient http;
+    http.setReuse(true);
     http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
+    http.addHeader("Authorization", "Bearer " + idToken);
     int code = http.PATCH(body);
     http.end();
-    client.stop();
-    delay(200);
     return code;
 }
 
 // ---------------------------------------------------------------------------
-// Upload one reading row via PATCH (works with API key).
+// Upload one reading via PATCH — reuses TLS connection.
 // ---------------------------------------------------------------------------
 int FirestoreSync::uploadReading(WiFiClientSecure &client,
                                  const String &sessionId,
                                  int index,
-                                 const String &csvLine)
+                                 const String &csvLine,
+                                 const String &idToken)
 {
     const int kCols   = 17;
     const int kCommas = kCols - 1;
@@ -67,6 +102,8 @@ int FirestoreSync::uploadReading(WiFiClientSecure &client,
     }
 
     long   t_rel_ms   = csvField(csvLine, cp,  0, kCols).toInt();
+    long   t_rel_us   = csvField(csvLine, cp,  1, kCols).toInt();
+    String time_local = csvField(csvLine, cp,  2, kCols);
     float  load_raw   = csvField(csvLine, cp,  3, kCols).toFloat();
     float  load_filt  = csvField(csvLine, cp,  4, kCols).toFloat();
     float  ax         = csvField(csvLine, cp,  5, kCols).toFloat();
@@ -75,18 +112,22 @@ int FirestoreSync::uploadReading(WiFiClientSecure &client,
     float  gx         = csvField(csvLine, cp,  8, kCols).toFloat();
     float  gy         = csvField(csvLine, cp,  9, kCols).toFloat();
     float  gz         = csvField(csvLine, cp, 10, kCols).toFloat();
+    float  mx         = csvField(csvLine, cp, 11, kCols).toFloat();
+    float  my         = csvField(csvLine, cp, 12, kCols).toFloat();
+    float  mz         = csvField(csvLine, cp, 13, kCols).toFloat();
     float  roll       = csvField(csvLine, cp, 14, kCols).toFloat();
     float  pitch      = csvField(csvLine, cp, 15, kCols).toFloat();
     float  yaw        = csvField(csvLine, cp, 16, kCols).toFloat();
 
     String url = String(kBaseUrl) +
                  "/sessions/" + sessionId +
-                 "/readings/" + String(index) +
-                 "?key=" + kApiKey;
+                 "/readings/" + String(index);
 
     String body =
         "{\"fields\":{"
         "\"t_rel_ms\":{\"integerValue\":\"" + String(t_rel_ms) + "\"},"
+        "\"t_rel_us\":{\"integerValue\":\"" + String(t_rel_us) + "\"},"
+        "\"time_local\":{\"stringValue\":\"" + time_local + "\"},"
         "\"load_cell_raw\":{\"doubleValue\":"  + String(load_raw,  3) + "},"
         "\"load_cell_filt\":{\"doubleValue\":" + String(load_filt, 3) + "},"
         "\"imu_ax\":{\"doubleValue\":"  + String(ax,  2) + "},"
@@ -95,23 +136,31 @@ int FirestoreSync::uploadReading(WiFiClientSecure &client,
         "\"imu_gx\":{\"doubleValue\":"  + String(gx,  2) + "},"
         "\"imu_gy\":{\"doubleValue\":"  + String(gy,  2) + "},"
         "\"imu_gz\":{\"doubleValue\":"  + String(gz,  2) + "},"
+        "\"imu_mx\":{\"doubleValue\":"  + String(mx,  2) + "},"
+        "\"imu_my\":{\"doubleValue\":"  + String(my,  2) + "},"
+        "\"imu_mz\":{\"doubleValue\":"  + String(mz,  2) + "},"
         "\"roll_deg\":{\"doubleValue\":"  + String(roll,  2) + "},"
         "\"pitch_deg\":{\"doubleValue\":" + String(pitch, 2) + "},"
         "\"yaw_deg\":{\"doubleValue\":"   + String(yaw,   2) + "}"
         "}}";
 
     HTTPClient http;
+    http.setReuse(true);
     http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
+    http.addHeader("Authorization", "Bearer " + idToken);
     int code = http.PATCH(body);
+    if (code < 0)
+    {
+        // Connection dropped — stop so next call reconnects cleanly
+        client.stop();
+    }
     http.end();
-    client.stop();
-    delay(100);
     return code;
 }
 
 // ---------------------------------------------------------------------------
-// Main entry point — one PATCH per reading, API key auth.
+// Main entry point.
 // ---------------------------------------------------------------------------
 SyncResult FirestoreSync::syncFile(const char *filePath, const String &sessionId)
 {
@@ -136,12 +185,25 @@ SyncResult FirestoreSync::syncFile(const char *filePath, const String &sessionId
     WiFiClientSecure client;
     client.setInsecure();
 
-    int metaCode = uploadSessionDoc(client, sessionId, millis());
+    // ── 1. Anonymous auth ─────────────────────────────────────────────────
+    String idToken = getIdToken(client);
+    if (idToken.isEmpty())
+    {
+        Serial.println("[Firestore] Auth failed — aborting sync");
+        f.close();
+        result.httpErrorCode = -2;
+        return result;
+    }
+
+    // ── 2. Session metadata doc ───────────────────────────────────────────
+    int metaCode = uploadSessionDoc(client, sessionId, millis(), idToken);
     Serial.printf("[Firestore] Session doc: %d\n", metaCode);
     if (metaCode != 200) result.httpErrorCode = metaCode;
 
-    f.readStringUntil('\n'); // skip header
+    // ── 3. Skip CSV header ────────────────────────────────────────────────
+    f.readStringUntil('\n');
 
+    // ── 4. Upload readings — one PATCH per row, TLS connection reused ─────
     int index = 0;
     while (f.available())
     {
@@ -149,11 +211,11 @@ SyncResult FirestoreSync::syncFile(const char *filePath, const String &sessionId
         line.trim();
         if (line.length() == 0) continue;
 
-        int code = uploadReading(client, sessionId, index, line);
+        int code = uploadReading(client, sessionId, index, line, idToken);
         if (code == 200)
         {
             result.readingsSynced++;
-            if (index % 50 == 0)
+            if (index % 100 == 0)
                 Serial.printf("[Firestore] %d readings uploaded...\n", index + 1);
         }
         else
